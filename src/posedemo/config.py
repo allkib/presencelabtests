@@ -17,9 +17,10 @@ class Settings(BaseSettings):
     imgsz: int = 640
     conf: float = 0.5  # person detection confidence
     kp_conf: float = 0.5  # keypoint visibility threshold
-    tracker: str = "bytetrack.yaml"
 
-    # Video source
+    # Server-side video source (a camera attached to the server, a file or a stream URL).
+    # Disable in hosted deployments, where clients stream from their browser instead.
+    enable_source: bool = True
     source: str = "0"  # camera index ("0", "1", ...) or video/image path or stream URL
     frame_width: int | None = 1280
     frame_height: int | None = 720
@@ -33,6 +34,12 @@ class Settings(BaseSettings):
     jpeg_quality: int = 80
     host: str = "127.0.0.1"
     port: int = 8000
+    forwarded_allow_ips: str = "127.0.0.1"  # set "*" behind a reverse proxy (Traefik)
+
+    # Browser-camera sessions (/ws/infer)
+    max_browser_sessions: int = 8
+    max_upload_bytes: int = 2_000_000
+    max_frame_side: int = 1280  # larger uploaded frames are downscaled
 
     @property
     def model_path(self) -> Path:

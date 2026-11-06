@@ -22,6 +22,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--host")
     p.add_argument("--port", type=int)
     p.add_argument("--no-mirror", dest="mirror", action="store_false", default=None)
+    p.add_argument(
+        "--browser-only",
+        dest="enable_source",
+        action="store_false",
+        default=None,
+        help="don't open a server-side camera; only accept browser-camera clients",
+    )
     p.add_argument("--log-level", default="info")
     return p.parse_args(argv)
 
@@ -36,7 +43,12 @@ def main(argv: list[str] | None = None) -> None:
 
     print(f"posedemo → http://{settings.host}:{settings.port}")
     uvicorn.run(
-        create_app(settings), host=settings.host, port=settings.port, log_level=args.log_level
+        create_app(settings),
+        host=settings.host,
+        port=settings.port,
+        log_level=args.log_level,
+        proxy_headers=True,
+        forwarded_allow_ips=settings.forwarded_allow_ips,
     )
 
 

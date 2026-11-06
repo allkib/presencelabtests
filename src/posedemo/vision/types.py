@@ -53,5 +53,9 @@ class PoseResult:
             "score": round(self.score, 3),
             "scores": {k: round(v, 3) for k, v in self.scores.items()},
             "bbox": [round(float(v), 1) for v in self.person.bbox],
+            "keypoints": [
+                [round(float(x), 1), round(float(y), 1), round(float(c), 2)]
+                for x, y, c in self.person.keypoints
+            ],
             "confidence": round(self.person.score, 3),
         }
