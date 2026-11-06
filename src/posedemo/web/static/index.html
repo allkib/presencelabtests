@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pose Demo</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>Pose Demo</h1>
+    <div class="meta">
+      <span id="status" class="pill">connecting…</span>
+      <span id="fps" class="pill">– FPS</span>
+    </div>
+  </header>
+  <main>
+    <section class="video">
+      <img id="stream" src="/stream" alt="Annotated camera stream" />
+      <div id="error" class="error" hidden></div>
+    </section>
+    <aside>
+      <h2>People</h2>
+      <ul id="people" class="people"><li class="empty">Nobody detected yet</li></ul>
+      <h2>Poses I know</h2>
+      <ul id="poses" class="poses"></ul>
+    </aside>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
