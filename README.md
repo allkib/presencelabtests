@@ -3,7 +3,8 @@
 Real-time webcam pose recognition with [Ultralytics YOLO pose](https://docs.ultralytics.com/tasks/pose/),
 served to the browser with FastAPI. Draws a skeleton for each person, tracks people across
 frames, and names the pose each person is doing: T-pose, hands up, left/right hand up,
-arms crossed, squat, or standing.
+arms crossed, squat, standing, or neutral. It also detects everyday **objects** (80 COCO classes:
+cell phone, cup, bottle, book, laptop, …) and says which person is holding them.
 
 There are two camera modes, which share one loaded model:
 
@@ -21,6 +22,7 @@ There are two camera modes, which share one loaded model:
 ```bash
 make setup          # creates .venv (Python 3.11) and installs the package + dev tools
 make run            # → open http://127.0.0.1:8000
+make dev            # same, but restarts automatically when you edit the code
 ```
 
 The first run downloads `yolo11n-pose.pt` (~6 MB) into `models/`.
@@ -42,6 +44,20 @@ make run ARGS="--browser-only"            # no server-side camera
 ```
 
 You can also set any option in `.env` (see `.env.example`, prefix `POSEDEMO_`).
+
+## Poses and objects
+
+- **Works at a desk.** Hand-raise poses only need your shoulders in view. A raised arm is
+  recognised from the wrist, or from the elbow when the wrist is hidden (in front of your face or
+  above the frame). An arm that's out of frame counts as "not raised".
+- **Neutral** is a fallback for when you're in view but not doing a specific pose. **Unknown**
+  means the model can't see enough of you, for example no shoulders.
+- **Debug toggle** (People panel): shows every pose's score and which joints are visible, so you
+  can see why a pose did or didn't match.
+- **Objects** come from a second YOLO model (`yolo11n.pt`) and are drawn in amber. An object is
+  "held" when one of a person's hands is inside or near its box. Use `--no-objects` (or
+  `POSEDEMO_ENABLE_OBJECTS=false`) to turn this off, and `POSEDEMO_OBJECT_EVERY_N=2` to run it on
+  every other frame to save CPU.
 
 ## Endpoints
 
@@ -136,6 +152,8 @@ Optional environment variables (Dokploy → Environment):
 | `POSEDEMO_MAX_BROWSER_SESSIONS` | `8` | Concurrent camera users; extra users get "server busy" |
 | `POSEDEMO_IMGSZ` | `640` | `480` or `416` is faster on small CPUs |
 | `POSEDEMO_CONF` | `0.5` | Person detection threshold |
+| `POSEDEMO_ENABLE_OBJECTS` | `true` | Object detection. Roughly halves frames/s on CPU. |
+| `POSEDEMO_OBJECT_EVERY_N` | `1` | `2`–`3` runs objects less often (faster on small servers) |
 
 **Server requirements:** at least 2 GB RAM (PyTorch plus the model use about 1 GB at runtime) and
 about 5 GB of free disk for Dokploy to build the image. The image is built for the server's own
