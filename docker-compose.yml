@@ -1,0 +1,11 @@
+# Local test of the production image:  docker compose up --build  → http://localhost:8000
+# (Dokploy can deploy either the Dockerfile directly or this compose file.)
+services:
+  posedemo:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      POSEDEMO_MAX_BROWSER_SESSIONS: "8"
+      # POSEDEMO_IMGSZ: "480"   # faster on small CPUs
+    restart: unless-stopped
