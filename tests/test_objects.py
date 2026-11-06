@@ -62,3 +62,11 @@ def test_periodic_objects_waits_until_ready():
     ready = True
     assert periodic.update(None)[0].label == "cup"
     assert PeriodicObjects(None).update(None) == []
+
+
+def test_large_objects_are_never_held(person_factory):
+    r = result(person_factory(arms="down"))
+    x1, y1, x2, y2 = r.person.bbox
+    bus = DetectedObject("bus", 0.9, np.array([x1 - 300, y1 - 100, x2 + 300, y2]))
+    attach_held_objects([r], [bus])
+    assert r.holding == []
