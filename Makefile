@@ -2,7 +2,7 @@ PYTHON ?= python3.11
 VENV   := .venv
 BIN    := $(VENV)/bin
 
-.PHONY: setup run test lint format clean release
+.PHONY: setup run dev test lint format clean release
 
 $(BIN)/python:
 	$(PYTHON) -m venv $(VENV)
@@ -13,6 +13,9 @@ setup: $(BIN)/python  ## Create venv and install package + dev deps
 
 run:  ## Start the web demo (http://127.0.0.1:8000)
 	$(BIN)/posedemo $(ARGS)
+
+dev:  ## Like run, but restarts automatically when you edit the code
+	$(BIN)/posedemo --reload $(ARGS)
 
 test:
 	$(BIN)/pytest
