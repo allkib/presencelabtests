@@ -12,11 +12,17 @@ from posedemo.vision.keypoints import SKELETON
 from posedemo.vision.objects import DetectedObject
 from posedemo.vision.types import PoseResult
 
-_PALETTE = [
-    (255, 159, 64), (75, 192, 192), (255, 99, 132), (153, 102, 255),
-    (54, 162, 235), (255, 205, 86), (46, 204, 113), (231, 76, 60),
-]  # fmt: skip
-_UNKNOWN_COLOR = (160, 160, 160)
+_PALETTE = [  # BGR, matching the web UI palette
+    (250, 139, 167),
+    (231, 140, 123),
+    (252, 132, 192),
+    (212, 234, 94),
+    (252, 171, 240),
+    (252, 180, 165),
+    (77, 211, 252),
+    (212, 168, 249),
+]
+_UNKNOWN_COLOR = (115, 115, 115)
 
 
 def color_for(label: str) -> tuple[int, int, int]:
@@ -71,7 +77,7 @@ def draw_hud(img: np.ndarray, fps: float, people: int) -> None:
     _label(img, f"{fps:4.1f} FPS | {people} people", (10, 34), (40, 40, 40), fg=(240, 240, 240))
 
 
-OBJECT_COLOR = (0, 215, 255)  # amber (BGR)
+OBJECT_COLOR = (245, 245, 245)  # near-white (BGR)
 
 
 def draw_object(img: np.ndarray, obj: DetectedObject) -> None:

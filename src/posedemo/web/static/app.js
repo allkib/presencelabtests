@@ -7,19 +7,20 @@ const wsUrl = (path) => `${location.protocol === "https:" ? "wss" : "ws"}://${lo
 const CAPTURE_MAX_SIDE = 640; // frames are downscaled before upload (model runs at 640)
 const JPEG_QUALITY = 0.7;
 const MIRROR = true;
-const OBJECT_COLOR = "#ffd700";
+const OBJECT_COLOR = "#f5f5f5";
+const LABEL_FONT = "Inter, -apple-system, sans-serif";
 const KP_NAMES = [
   "nose", "L eye", "R eye", "L ear", "R ear", "L shoulder", "R shoulder", "L elbow",
   "R elbow", "L wrist", "R wrist", "L hip", "R hip", "L knee", "R knee", "L ankle", "R ankle",
 ];
-const PALETTE = ["#ff9f40", "#4bc0c0", "#ff6384", "#9966ff", "#36a2eb", "#ffcd56", "#2ecc71", "#e74c3c"];
+const PALETTE = ["#a78bfa", "#7b8ce7", "#c084fc", "#5eead4", "#f0abfc", "#a5b4fc", "#fcd34d", "#f9a8d4"];
 
 let config = { skeleton: [], kp_conf: 0.5, server_source: false };
 
 // ---------- shared UI ----------
 
 function colorFor(label) {
-  if (label === "unknown") return "#a0a0a0";
+  if (label === "unknown") return "#737373";
   let h = 0;
   for (const c of label) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return PALETTE[h % PALETTE.length];
@@ -222,6 +223,13 @@ const browser = {
   },
 };
 
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+  else ctx.rect(x, y, w, h);
+  ctx.fill();
+}
+
 function clearOverlay() {
   const c = $("overlay");
   c.getContext("2d").clearRect(0, 0, c.width, c.height);
@@ -252,11 +260,11 @@ function drawOverlay(msg) {
     ctx.lineWidth = lw;
     ctx.strokeRect(left, Y(y1), width, Y(y2) - Y(y1));
     const text = `${o.label} ${o.score.toFixed(2)}`;
-    ctx.font = `600 ${fontPx}px system-ui, sans-serif`;
+    ctx.font = `500 ${fontPx}px ${LABEL_FONT}`;
     const tw = ctx.measureText(text).width;
     const top = Math.min(H, Y(y2) + fontPx + 10);
     ctx.fillStyle = OBJECT_COLOR;
-    ctx.fillRect(left, top - fontPx - 10, tw + 12, fontPx + 10);
+    roundRect(ctx, left, top - fontPx - 10, tw + 12, fontPx + 10, 6);
     ctx.fillStyle = "#141414";
     ctx.fillText(text, left + 6, top - 8);
   }
@@ -293,11 +301,11 @@ function drawOverlay(msg) {
     const top = Math.max(28, Y(y1));
     const holding = p.holding?.length ? ` + ${p.holding.join(", ")}` : "";
     const text = `#${p.id ?? "?"} ${pretty(p.pose)} ${p.score.toFixed(2)}${holding}`;
-    ctx.font = `600 ${fontPx}px system-ui, sans-serif`;
+    ctx.font = `500 ${fontPx}px ${LABEL_FONT}`;
     const tw = ctx.measureText(text).width;
     const th = fontPx + 10;
     ctx.fillStyle = color;
-    ctx.fillRect(left, top - th, tw + 12, th);
+    roundRect(ctx, left, top - th, tw + 12, th, 6);
     ctx.fillStyle = "#141414";
     ctx.fillText(text, left + 6, top - 8);
   }
@@ -379,7 +387,7 @@ async function init() {
   $("debug").checked = localStorage.getItem("posedemo.debug") === "1";
   $("debug").onchange = () => localStorage.setItem("posedemo.debug", $("debug").checked ? "1" : "0");
   $("poses").innerHTML = poses
-    .map((p) => `<li data-pose="${p.name}"><b>${pretty(p.name)}</b> — ${p.description}</li>`)
+    .map((p) => `<li data-pose="${p.name}"><b>${pretty(p.name)}</b>${p.description}</li>`)
     .join("");
   $("modeServer").hidden = !config.server_source;
   document.querySelectorAll(".modes button").forEach((b) => (b.onclick = () => setMode(b.dataset.mode)));
