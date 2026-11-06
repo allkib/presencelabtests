@@ -5,6 +5,17 @@ served to the browser with FastAPI. Draws a skeleton for each person, tracks peo
 frames, and names the pose each person is doing: T-pose, hands up, left/right hand up,
 arms crossed, squat, or standing.
 
+There are two camera modes, which share one loaded model:
+
+- **Browser camera** (default): the visitor's browser captures their webcam and uploads frames
+  over a WebSocket. The server returns keypoints and pose names, and the browser draws them over the
+  live video. This mode works when the app is hosted (Docker/Dokploy).
+- **Server camera**: the server opens a camera attached to its own machine, or a video file or
+  stream URL, and streams annotated frames as MJPEG. Useful locally, and for fixed cameras.
+
+> YOLO pose only outputs 17 body keypoints per person. The pose *names* come from the rules in
+> `src/posedemo/poses/rules.py`.
+
 ## Quick start
 
 ```bash
@@ -14,8 +25,11 @@ make run            # → open http://127.0.0.1:8000
 
 The first run downloads `yolo11n-pose.pt` (~6 MB) into `models/`.
 
-> **macOS:** the terminal app you launch from needs Camera permission
-> (System Settings → Privacy & Security → Camera). Without it, the page shows a clear error.
+Click **Start camera** and allow access when the browser asks. Browsers only allow camera access
+on `https://` pages or `http://localhost`.
+
+> **Server camera mode on macOS:** the terminal app you launch from needs Camera permission
+> (System Settings → Privacy & Security → Camera). Use `--browser-only` to skip the server camera.
 
 ### Options
 
@@ -24,6 +38,7 @@ make run ARGS="--model yolo11s-pose.pt"   # bigger / more accurate model
 make run ARGS="--source 1"                # another camera
 make run ARGS="--source clip.mp4"         # video file (loops), image, or RTSP/HTTP URL
 make run ARGS="--device cpu --no-mirror --port 9000"
+make run ARGS="--browser-only"            # no server-side camera
 ```
 
 You can also set any option in `.env` (see `.env.example`, prefix `POSEDEMO_`).
@@ -33,22 +48,31 @@ You can also set any option in `.env` (see `.env.example`, prefix `POSEDEMO_`).
 | Route | Purpose |
 |---|---|
 | `GET /` | Web UI |
-| `GET /stream` | MJPEG stream of annotated frames |
-| `GET /snapshot.jpg` | Latest annotated frame |
-| `GET /api/state` | Latest detections as JSON (`people[].pose`, `score`, `scores`, `bbox`, `id`) |
-| `WS /ws` | Pushes the state JSON on every processed frame |
+| `WS /ws/infer` | Browser-camera mode: send JPEG frames (binary), receive `{people: [{pose, score, keypoints, bbox, id}]}` |
+| `GET /api/config` | Available modes, skeleton edges |
+| `GET /stream` | Server camera: MJPEG stream of annotated frames |
+| `GET /snapshot.jpg` | Server camera: latest annotated frame |
+| `GET /api/state` | Server camera: latest detections as JSON |
+| `WS /ws` | Server camera: pushes the state JSON on every processed frame |
 | `GET /api/poses` | Registered poses |
-| `GET /health` | Pipeline status |
+| `GET /health` | 200 when the model is loaded (and the server camera is healthy, if enabled), else 503 |
 
 ## Architecture
 
 ```
-FrameSource ─▶ PoseDetector ─▶ PoseClassifier ─▶ LabelSmoother ─▶ annotate ─▶ ResultBus ─▶ FastAPI (/stream, /ws, /api)
- (sources/)     (vision/)        (poses/)          (poses/)      (pipeline/)   (pipeline/)    (web/)
+Server camera:  FrameSource ─▶ ┐                                                       ┌─▶ annotate ─▶ ResultBus ─▶ /stream, /ws
+                               ├─▶ PoseDetector ─▶ IouTracker ─▶ PoseClassifier ─▶ LabelSmoother
+Browser camera: /ws/infer  ──▶ ┘   (one shared model)  (per stream)                    └─▶ JSON reply ─▶ browser canvas
 ```
 
-- **One inference thread** (`pipeline/worker.py`) publishes to a `ResultBus`. Any number of browser
-  clients read from the bus, so adding viewers doesn't add inference cost.
+- **One model, many streams:** the YOLO model is loaded once and shared. Tracking and smoothing
+  state is kept per stream (`vision/tracking.py`, `web/sessions.py`), so users never get each
+  other's IDs or labels.
+- **Server camera** runs in one inference thread (`pipeline/worker.py`) that publishes to a
+  `ResultBus`. Any number of viewers read from the bus, so adding viewers doesn't add inference cost.
+- **Browser camera** uses back-pressure: the browser sends its next frame only after the previous
+  reply arrives, so a slow server lowers the frame rate instead of building up a queue.
+  `POSEDEMO_MAX_BROWSER_SESSIONS` caps concurrent users.
 - **Swappable parts:** `create_app(settings, source=..., detector=...)` accepts any `FrameSource` or
   `PoseDetector`, which is how the tests run without a camera or a model.
 - **Pose rules** use joint angles and positions measured relative to torso length, so they work at
@@ -72,6 +96,49 @@ class Star(PoseRule):
 
 The new pose then appears automatically in the classifier, `/api/poses`, and the UI. Add a synthetic
 skeleton case to `tests/test_rules.py` to test it.
+
+## Deploying with Docker / Dokploy
+
+The `Dockerfile` builds a CPU-only, browser-camera image. The model weights are included in the
+image, the container runs as a non-root user, and `/health` drives the Docker health check.
+
+```bash
+docker compose up --build        # local test → http://localhost:8000
+```
+
+**Dokploy:**
+
+1. Create an **Application** and point it at this GitHub repo (branch `main`).
+2. Set **Build Type** to **Dockerfile** (path `Dockerfile`).
+3. Under **Domains**, add your domain with **container port `8000`** and turn on **HTTPS**
+   (Let's Encrypt). HTTPS is required, because browsers block camera access on plain-HTTP sites.
+4. Deploy. WebSockets work through Dokploy's Traefik proxy without extra configuration.
+
+Optional environment variables (Dokploy → Environment):
+
+| Variable | Default | Notes |
+|---|---|---|
+| `POSEDEMO_MAX_BROWSER_SESSIONS` | `8` | Concurrent camera users; extra users get "server busy" |
+| `POSEDEMO_IMGSZ` | `640` | `480` or `416` is faster on small CPUs |
+| `POSEDEMO_CONF` | `0.5` | Person detection threshold |
+
+**Server requirements:** at least 2 GB RAM (PyTorch plus the model use about 1 GB at runtime) and
+about 5 GB of free disk for Dokploy to build the image. The image is built for the server's own
+CPU architecture, so x86 and ARM VPSes both work.
+
+**After deploying**, check it end to end from any machine that has the dev install:
+
+```bash
+.venv/bin/python scripts/smoke_test.py https://your-domain.example
+```
+
+**CI:** every push to `main` runs `.github/workflows/ci.yml`. It runs lint and tests, then builds
+this same image on GitHub, starts it, waits for the health check, and runs the smoke test inside
+the container. A green check means the image Dokploy builds will start and serve poses.
+
+Performance: one shared model on a CPU VPS handles roughly 5–15 frames/s in total, split across
+active users. For a GPU host, build with
+`--build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124` and set `POSEDEMO_DEVICE=cuda`.
 
 ## Development
 
