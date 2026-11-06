@@ -9,14 +9,27 @@
 <body>
   <header>
     <h1>Pose Demo</h1>
+    <nav class="modes" role="tablist" aria-label="Camera source">
+      <button id="modeBrowser" role="tab" data-mode="browser">Browser camera</button>
+      <button id="modeServer" role="tab" data-mode="server" hidden>Server camera</button>
+    </nav>
     <div class="meta">
-      <span id="status" class="pill">connecting…</span>
+      <span id="status" class="pill">starting…</span>
       <span id="fps" class="pill">– FPS</span>
     </div>
   </header>
   <main>
     <section class="video">
-      <img id="stream" src="/stream" alt="Annotated camera stream" />
+      <div id="browserStage" class="stage">
+        <video id="video" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div id="startPanel" class="start-panel">
+          <p>Your camera is processed by the pose model on the server. Nothing is stored.</p>
+          <button id="startBtn" class="primary">Start camera</button>
+        </div>
+        <button id="stopBtn" class="stop" hidden>Stop</button>
+      </div>
+      <img id="stream" alt="Annotated server camera stream" hidden />
       <div id="error" class="error" hidden></div>
     </section>
     <aside>
