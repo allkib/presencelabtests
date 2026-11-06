@@ -3,42 +3,93 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Pose Demo</title>
+  <meta name="color-scheme" content="dark" />
+  <title>posedemo · Real-time pose &amp; object recognition</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap"
+  />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <header>
-    <h1>Pose Demo</h1>
-    <nav class="modes" role="tablist" aria-label="Camera source">
-      <button id="modeBrowser" role="tab" data-mode="browser">Browser camera</button>
-      <button id="modeServer" role="tab" data-mode="server" hidden>Server camera</button>
-    </nav>
-    <div class="meta">
-      <span id="status" class="pill">starting…</span>
-      <span id="fps" class="pill">– FPS</span>
-    </div>
-  </header>
-  <main>
-    <section class="video">
-      <div id="browserStage" class="stage">
-        <video id="video" playsinline muted></video>
-        <canvas id="overlay"></canvas>
-        <div id="startPanel" class="start-panel">
-          <p>Your camera is processed by the pose model on the server. Nothing is stored.</p>
-          <button id="startBtn" class="primary">Start camera</button>
-        </div>
-        <button id="stopBtn" class="stop" hidden>Stop</button>
+  <div class="glow" aria-hidden="true"></div>
+
+  <nav class="topbar">
+    <div class="topbar-inner">
+      <a class="wordmark" href="/" aria-label="posedemo home">
+        <span class="mark" aria-hidden="true"></span>posedemo
+      </a>
+      <div class="modes" role="tablist" aria-label="Camera source">
+        <button id="modeBrowser" role="tab" data-mode="browser">Browser camera</button>
+        <button id="modeServer" role="tab" data-mode="server" hidden>Server camera</button>
       </div>
-      <img id="stream" alt="Annotated server camera stream" hidden />
-      <div id="error" class="error" hidden></div>
+      <div class="meta">
+        <span id="status" class="pill">starting…</span>
+        <span id="fps" class="pill">– FPS</span>
+        <span id="version" class="pill muted" title="Server version and start time"></span>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <p class="eyebrow">Real-time pose &amp; object recognition</p>
+    <h1>Your camera, understood<br />frame by frame.</h1>
+    <p class="lede">
+      Skeletons, named poses and everyday objects, detected live by YOLO and explained as you move.
+    </p>
+  </header>
+
+  <main class="layout">
+    <section class="card video">
+      <div class="card-head">
+        <span class="eyebrow">Live view</span>
+        <button id="stopBtn" class="btn btn-ghost btn-sm" hidden>Stop camera</button>
+      </div>
+      <div class="viewport">
+        <div id="browserStage" class="stage">
+          <video id="video" playsinline muted></video>
+          <canvas id="overlay"></canvas>
+          <div id="startPanel" class="start-panel">
+            <div class="start-inner">
+              <span class="eyebrow">Camera off</span>
+              <p>Frames are analysed on the server and never stored.</p>
+              <button id="startBtn" class="btn btn-primary">Start camera <span aria-hidden="true">→</span></button>
+            </div>
+          </div>
+        </div>
+        <img id="stream" alt="Annotated server camera stream" hidden />
+        <div id="error" class="error" role="alert" hidden></div>
+      </div>
     </section>
-    <aside>
-      <h2>People</h2>
-      <ul id="people" class="people"><li class="empty">Nobody detected yet</li></ul>
-      <h2>Poses I know</h2>
-      <ul id="poses" class="poses"></ul>
+
+    <aside class="sidebar">
+      <section class="card">
+        <div class="card-head">
+          <span class="eyebrow">People</span>
+          <label class="toggle"><input type="checkbox" id="debug" /><span>Debug</span></label>
+        </div>
+        <ul id="people" class="people"><li class="empty">Nobody detected yet</li></ul>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><span class="eyebrow">Objects</span></div>
+        <ul id="objects" class="objects"><li class="empty">No objects detected</li></ul>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><span class="eyebrow">Poses I know</span></div>
+        <ul id="poses" class="poses"></ul>
+      </section>
     </aside>
   </main>
+
+  <footer class="footer">
+    <span>Ultralytics YOLO · FastAPI</span>
+    <span>Rule-based poses · COCO objects</span>
+  </footer>
+
   <script src="/static/app.js"></script>
 </body>
 </html>

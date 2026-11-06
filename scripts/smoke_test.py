@@ -54,6 +54,12 @@ def main() -> int:
     health = get_json(f"{base}/health")
     print("health:", health)
     assert health["ok"], "server not healthy"
+    # The object model loads after the pose model; give it a moment.
+    deadline = time.time() + 60
+    while health.get("objects") == "loading" and time.time() < deadline:
+        time.sleep(1)
+        health = get_json(f"{base}/health")
+    print("objects model:", health.get("objects"))
 
     config = get_json(f"{base}/api/config")
     assert len(config["skeleton"]) > 10, config
@@ -66,6 +72,10 @@ def main() -> int:
         print(f"  #{p['id']} {p['pose']} ({p['score']})")
     assert people, "no people detected in test image"
     assert all(len(p["keypoints"]) == 17 for p in people)
+    objects = [o["label"] for o in result.get("objects", [])]
+    print("objects:", objects)
+    if health.get("objects") == "ready" and len(sys.argv) <= 2:
+        assert "bus" in objects, "object detector didn't find the bus in bus.jpg"
     print("SMOKE TEST PASSED")
     return 0
 

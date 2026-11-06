@@ -9,6 +9,7 @@ import pytest
 
 from posedemo.sources.base import Frame
 from posedemo.vision.keypoints import KP
+from posedemo.vision.objects import DetectedObject
 from posedemo.vision.types import Person
 
 # A person facing the camera: their LEFT side appears at larger x. y grows downward.
@@ -54,9 +55,53 @@ def make_person(arms: str = "down", squat: bool = False, track_id: int | None = 
     return Person(keypoints=kps, bbox=bbox, score=0.9, track_id=track_id)
 
 
+@pytest.fixture(autouse=True)
+def _no_real_object_model(monkeypatch):
+    """Tests never load real YOLO weights; inject FakeObjectDetector where needed."""
+    monkeypatch.setenv("POSEDEMO_ENABLE_OBJECTS", "false")
+
+
 @pytest.fixture
 def person_factory():
     return make_person
+
+
+# Close-up webcam framing (1280x720): head and shoulders only, shoulders near the bottom.
+DESK_BASE = {
+    KP.NOSE: (600, 450), KP.LEFT_EYE: (640, 410), KP.RIGHT_EYE: (565, 410),
+    KP.LEFT_EAR: (690, 420), KP.RIGHT_EAR: (520, 420),
+    KP.LEFT_SHOULDER: (830, 655), KP.RIGHT_SHOULDER: (380, 655),
+}  # fmt: skip
+DESK_ARM = {  # per side, as (dx from that shoulder, y); dx is mirrored for the right side
+    "down": {"elbow": (40, 715), "wrist": None},
+    "elbow_up": {"elbow": (-20, 575), "wrist": None},
+    "wrist_up": {"elbow": (60, 560), "wrist": (20, 420)},
+    "wrist_above_head": {"elbow": (60, 480), "wrist": (10, 300)},
+}
+
+
+def make_desk_person(left: str | None = None, right: str | None = None):
+    kps = np.zeros((17, 3), dtype=float)
+    for k, (x, y) in DESK_BASE.items():
+        kps[k] = (x, y, 0.9)
+    for side, pose, sign in (("left", left, 1), ("right", right, -1)):
+        if pose is None:
+            continue  # arm out of frame
+        sh = KP.LEFT_SHOULDER if side == "left" else KP.RIGHT_SHOULDER
+        el = KP.LEFT_ELBOW if side == "left" else KP.RIGHT_ELBOW
+        wr = KP.LEFT_WRIST if side == "left" else KP.RIGHT_WRIST
+        sx = kps[sh, 0]
+        for kp, spec in ((el, DESK_ARM[pose]["elbow"]), (wr, DESK_ARM[pose]["wrist"])):
+            if spec is not None:
+                kps[kp] = (sx + sign * spec[0], spec[1], 0.8)
+    visible = kps[kps[:, 2] > 0]
+    bbox = np.array([visible[:, 0].min(), 180, visible[:, 0].max(), 720])
+    return Person(keypoints=kps, bbox=bbox, score=0.9, track_id=1)
+
+
+@pytest.fixture
+def desk_person():
+    return make_desk_person
 
 
 class FakeSource:
@@ -87,3 +132,23 @@ class FakeDetector:
 
     def detect(self, image) -> list[Person]:
         return [Person(p.keypoints.copy(), p.bbox.copy(), p.score, p.track_id) for p in self.people]
+
+
+class FakeObjectDetector:
+    def __init__(self, objects: list[DetectedObject], fail: bool = False):
+        self.objects = objects
+        self.fail = fail
+        self.calls = 0
+
+    def load(self) -> None:
+        if self.fail:
+            raise RuntimeError("object weights missing")
+
+    def detect(self, image) -> list[DetectedObject]:
+        self.calls += 1
+        return [DetectedObject(o.label, o.score, o.bbox.copy()) for o in self.objects]
+
+
+def phone_near(person: Person, kp: KP, size: float = 60) -> DetectedObject:
+    x, y = person.keypoints[kp, :2]
+    return DetectedObject("cell phone", 0.8, np.array([x - size / 2, y - size, x + size / 2, y]))

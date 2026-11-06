@@ -22,11 +22,18 @@ class PoseClassifier:
         self.kp_conf = kp_conf
 
     def classify_one(self, person: Person) -> PoseResult:
+        """Best specific pose above the threshold; otherwise the best fallback pose
+        (e.g. "neutral"); otherwise "unknown"."""
         scores = {r.name: r.evaluate(person, self.kp_conf) for r in self.rules}
-        best = max(scores, key=scores.get, default=None)
-        if best is None or scores[best] < self.threshold:
-            return PoseResult(person, UNKNOWN, scores.get(best, 0.0) if best else 0.0, scores)
-        return PoseResult(person, best, scores[best], scores)
+        for group in (
+            [r for r in self.rules if not r.fallback],
+            [r for r in self.rules if r.fallback],
+        ):
+            best = max((r.name for r in group), key=scores.get, default=None)
+            if best is not None and scores[best] >= self.threshold:
+                return PoseResult(person, best, scores[best], scores)
+        top = max(scores.values(), default=0.0)
+        return PoseResult(person, UNKNOWN, top, scores)
 
     def classify(self, people: Iterable[Person]) -> list[PoseResult]:
         return [self.classify_one(p) for p in people]

@@ -13,7 +13,9 @@ from posedemo.pipeline.annotate import annotate
 from posedemo.pipeline.bus import ResultBus
 from posedemo.poses import LabelSmoother, PoseClassifier
 from posedemo.sources.base import FrameSource
+from posedemo.vision.association import attach_held_objects
 from posedemo.vision.detector import PoseDetector
+from posedemo.vision.objects import PeriodicObjects
 from posedemo.vision.tracking import IouTracker
 
 log = logging.getLogger(__name__)
@@ -27,6 +29,7 @@ class PosePipeline:
         detector: PoseDetector,
         bus: ResultBus,
         classifier: PoseClassifier | None = None,
+        objects: PeriodicObjects | None = None,
     ) -> None:
         self.settings = settings
         self.source = source
@@ -36,6 +39,7 @@ class PosePipeline:
             threshold=settings.pose_threshold, kp_conf=settings.kp_conf
         )
         self.tracker = IouTracker()
+        self.objects = objects or PeriodicObjects(None)
         self.smoother = LabelSmoother(window=settings.smoothing_window)
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -90,15 +94,18 @@ class PosePipeline:
     def _process(self, image, timestamp: float) -> None:
         s = self.settings
         people = self.tracker.update(self.detector.detect(image))
+        objects = self.objects.update(image)
         results = self.smoother.update(self.classifier.classify(people))
+        attach_held_objects(results, objects, s.kp_conf)
 
         h, w = image.shape[:2]
         if s.mirror:
             image = cv2.flip(image, 1)
             for r in results:
                 r.person = r.person.mirrored(w)
+            objects = [o.mirrored(w) for o in objects]
 
-        annotate(image, results, self._fps, s.kp_conf)
+        annotate(image, results, self._fps, s.kp_conf, objects)
         ok, buf = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, s.jpeg_quality])
         state = {
             "status": "running",
@@ -107,5 +114,6 @@ class PosePipeline:
             "fps": round(self._fps, 1),
             "frame_size": [w, h],
             "people": [r.to_dict() for r in results],
+            "objects": [o.to_dict() for o in objects],
         }
         self.bus.publish(buf.tobytes() if ok else None, state)

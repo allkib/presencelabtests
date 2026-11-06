@@ -16,7 +16,14 @@ class Settings(BaseSettings):
     device: str = "auto"  # auto | mps | cuda | cpu
     imgsz: int = 640
     conf: float = 0.5  # person detection confidence
-    kp_conf: float = 0.5  # keypoint visibility threshold
+    kp_conf: float = 0.35  # keypoint visibility threshold (edge-of-frame joints score ~0.4)
+
+    # Object detection (COCO-80: cell phone, cup, bottle, book, laptop, ...)
+    enable_objects: bool = True
+    object_model: str = "yolo11n.pt"
+    object_conf: float = 0.4
+    object_classes: list[str] | None = None  # None = every class except "person"
+    object_every_n: int = 1  # run object detection every N frames (save CPU)
 
     # Server-side video source (a camera attached to the server, a file or a stream URL).
     # Disable in hosted deployments, where clients stream from their browser instead.
@@ -41,10 +48,9 @@ class Settings(BaseSettings):
     max_upload_bytes: int = 2_000_000
     max_frame_side: int = 1280  # larger uploaded frames are downscaled
 
-    @property
-    def model_path(self) -> Path:
+    def weights_path(self, name: str) -> Path:
         """Weights path inside ``models_dir`` (Ultralytics downloads it there if missing)."""
-        p = Path(self.model)
+        p = Path(name)
         return p if p.is_absolute() or p.parent != Path(".") else self.models_dir / p
 
     def resolve_device(self) -> str:

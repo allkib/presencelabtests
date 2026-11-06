@@ -6,8 +6,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from posedemo.config import Settings
+from posedemo.vision.keypoints import KP
 from posedemo.web.app import create_app
-from tests.conftest import FakeDetector, FakeSource
+from tests.conftest import FakeDetector, FakeObjectDetector, FakeSource, phone_near
 
 
 def wait_for(predicate, timeout=5.0):
@@ -172,3 +173,68 @@ def test_infer_reports_loading_model(person_factory):
             assert ws.receive_json() == {"type": "status", "status": "loading", "error": None}
         gate.set()
         wait_for(lambda: c.get("/health").status_code == 200)
+
+
+# ---- object detection ----
+
+
+@pytest.fixture
+def phone_app(person_factory):
+    person = person_factory(arms="left_up")
+    return person, FakeDetector([person]), FakeObjectDetector([phone_near(person, KP.LEFT_WRIST)])
+
+
+def test_infer_returns_objects_and_holding(phone_app):
+    _, det, obj_det = phone_app
+    app = create_app(Settings(enable_source=False), detector=det, object_detector=obj_det)
+    with TestClient(app) as c:
+        wait_for(lambda: c.get("/health").json()["objects"] == "ready")
+        with c.websocket_connect("/ws/infer") as ws:
+            ws.send_bytes(jpeg())
+            msg = ws.receive_json()
+    assert [o["label"] for o in msg["objects"]] == ["cell phone"]
+    assert msg["people"][0]["pose"] == "left_hand_up"
+    assert msg["people"][0]["holding"] == ["cell phone"]
+
+
+def test_server_source_reports_objects(phone_app):
+    _, det, obj_det = phone_app
+    app = create_app(
+        Settings(smoothing_window=1, mirror=True),
+        source=FakeSource(),
+        detector=det,
+        object_detector=obj_det,
+    )
+    with TestClient(app) as c:
+        state = wait_for(lambda: (s := c.get("/api/state").json()).get("objects") and s)
+    assert state["objects"][0]["label"] == "cell phone"
+    assert state["people"][0]["holding"] == ["cell phone"]
+
+
+def test_object_model_failure_keeps_poses_working(phone_app):
+    _, det, _ = phone_app
+    broken = FakeObjectDetector([], fail=True)
+    app = create_app(Settings(enable_source=False), detector=det, object_detector=broken)
+    with TestClient(app) as c:
+        health = wait_for(lambda: (h := c.get("/health")).json()["objects"] == "error" and h)
+        assert health.status_code == 200
+        assert health.json()["objects_error"] == "object weights missing"
+        with c.websocket_connect("/ws/infer") as ws:
+            ws.send_bytes(jpeg())
+            msg = ws.receive_json()
+    assert msg["objects"] == []
+    assert msg["people"][0]["pose"] == "left_hand_up"
+
+
+def test_objects_disabled_by_setting(browser_client):
+    assert browser_client.get("/api/config").json()["objects"] == "disabled"
+    with browser_client.websocket_connect("/ws/infer") as ws:
+        ws.send_bytes(jpeg())
+        assert ws.receive_json()["objects"] == []
+
+
+def test_version_reported(browser_client):
+    from posedemo import __version__
+
+    body = browser_client.get("/health").json()
+    assert body["version"] == __version__ and body["started_at"] > 0

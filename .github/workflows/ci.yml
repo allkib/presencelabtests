@@ -1,9 +1,13 @@
 name: CI
 
+# dev:  every push is tested and the Docker image is built + smoke-tested.
+# main: production (Dokploy deploys it). Changes arrive only via PRs from dev,
+#       and these checks must pass before merging.
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
+    branches: [main, dev]
 
 concurrency:
   group: ci-${{ github.ref }}

@@ -9,13 +9,20 @@ import numpy as np
 
 from posedemo.poses.classifier import UNKNOWN
 from posedemo.vision.keypoints import SKELETON
+from posedemo.vision.objects import DetectedObject
 from posedemo.vision.types import PoseResult
 
-_PALETTE = [
-    (255, 159, 64), (75, 192, 192), (255, 99, 132), (153, 102, 255),
-    (54, 162, 235), (255, 205, 86), (46, 204, 113), (231, 76, 60),
-]  # fmt: skip
-_UNKNOWN_COLOR = (160, 160, 160)
+_PALETTE = [  # BGR, matching the web UI palette
+    (250, 139, 167),
+    (231, 140, 123),
+    (252, 132, 192),
+    (212, 234, 94),
+    (252, 171, 240),
+    (252, 180, 165),
+    (77, 211, 252),
+    (212, 168, 249),
+]
+_UNKNOWN_COLOR = (115, 115, 115)
 
 
 def color_for(label: str) -> tuple[int, int, int]:
@@ -47,6 +54,8 @@ def draw_result(img: np.ndarray, r: PoseResult, kp_conf: float) -> None:
     cv2.rectangle(img, (x1, y1), (x2, y2), color, 1, cv2.LINE_AA)
     tid = f"#{r.person.track_id} " if r.person.track_id is not None else ""
     text = f"{tid}{pretty(r.label)} {r.score:.2f}"
+    if r.holding:
+        text += f" + {', '.join(r.holding)}"
     _label(img, text, (max(x1, 0), max(y1, 75)), color)  # keep clear of the HUD
 
 
@@ -68,7 +77,25 @@ def draw_hud(img: np.ndarray, fps: float, people: int) -> None:
     _label(img, f"{fps:4.1f} FPS | {people} people", (10, 34), (40, 40, 40), fg=(240, 240, 240))
 
 
-def annotate(img: np.ndarray, results: list[PoseResult], fps: float, kp_conf: float) -> np.ndarray:
+OBJECT_COLOR = (245, 245, 245)  # near-white (BGR)
+
+
+def draw_object(img: np.ndarray, obj: DetectedObject) -> None:
+    x1, y1, x2, y2 = (int(v) for v in obj.bbox)
+    thickness = max(2, img.shape[1] // 500)
+    cv2.rectangle(img, (x1, y1), (x2, y2), OBJECT_COLOR, thickness, cv2.LINE_AA)
+    _label(img, f"{obj.label} {obj.score:.2f}", (max(x1, 0), max(y2 + 28, 28)), OBJECT_COLOR)
+
+
+def annotate(
+    img: np.ndarray,
+    results: list[PoseResult],
+    fps: float,
+    kp_conf: float,
+    objects: list[DetectedObject] = (),
+) -> np.ndarray:
+    for obj in objects:
+        draw_object(img, obj)
     for r in results:
         draw_result(img, r, kp_conf)
     draw_hud(img, fps, len(results))
