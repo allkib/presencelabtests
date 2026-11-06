@@ -37,8 +37,12 @@ async def health(request: Request) -> JSONResponse:
     ok = model.state == "ready" and source_ok
     body = {
         "ok": ok,
+        "version": request.app.state.version,
+        "started_at": request.app.state.started_at,
         "model": model.state,
         "model_error": model.error,
+        "objects": model.objects,
+        "objects_error": model.objects_error,
         "server_source": None if pipeline is None else source.get("status"),
         "server_source_error": None if pipeline is None else source.get("error"),
     }
@@ -50,8 +54,11 @@ async def config(request: Request) -> dict:
     """What the UI needs to know: available modes and how to draw skeletons."""
     s = request.app.state.settings
     return {
+        "version": request.app.state.version,
+        "started_at": request.app.state.started_at,
         "server_source": request.app.state.pipeline is not None,
         "model": request.app.state.model.state,
+        "objects": request.app.state.model.objects,
         "max_frame_side": s.max_frame_side,
         "kp_conf": s.kp_conf,
         "skeleton": [[int(a), int(b)] for a, b in SKELETON],
@@ -133,7 +140,9 @@ async def ws_infer(websocket: WebSocket) -> None:
         return
 
     async with slots:
-        session = BrowserSession(settings, app.state.detector, app.state.classifier)
+        session = BrowserSession(
+            settings, app.state.detector, app.state.classifier, app.state.objects_for_stream()
+        )
         try:
             while True:
                 msg = await websocket.receive()

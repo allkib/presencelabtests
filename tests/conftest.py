@@ -9,6 +9,7 @@ import pytest
 
 from posedemo.sources.base import Frame
 from posedemo.vision.keypoints import KP
+from posedemo.vision.objects import DetectedObject
 from posedemo.vision.types import Person
 
 # A person facing the camera: their LEFT side appears at larger x. y grows downward.
@@ -52,6 +53,12 @@ def make_person(arms: str = "down", squat: bool = False, track_id: int | None = 
     xs, ys = kps[:, 0], kps[:, 1]
     bbox = np.array([xs.min(), ys.min(), xs.max(), ys.max()])
     return Person(keypoints=kps, bbox=bbox, score=0.9, track_id=track_id)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_object_model(monkeypatch):
+    """Tests never load real YOLO weights; inject FakeObjectDetector where needed."""
+    monkeypatch.setenv("POSEDEMO_ENABLE_OBJECTS", "false")
 
 
 @pytest.fixture
@@ -125,3 +132,23 @@ class FakeDetector:
 
     def detect(self, image) -> list[Person]:
         return [Person(p.keypoints.copy(), p.bbox.copy(), p.score, p.track_id) for p in self.people]
+
+
+class FakeObjectDetector:
+    def __init__(self, objects: list[DetectedObject], fail: bool = False):
+        self.objects = objects
+        self.fail = fail
+        self.calls = 0
+
+    def load(self) -> None:
+        if self.fail:
+            raise RuntimeError("object weights missing")
+
+    def detect(self, image) -> list[DetectedObject]:
+        self.calls += 1
+        return [DetectedObject(o.label, o.score, o.bbox.copy()) for o in self.objects]
+
+
+def phone_near(person: Person, kp: KP, size: float = 60) -> DetectedObject:
+    x, y = person.keypoints[kp, :2]
+    return DetectedObject("cell phone", 0.8, np.array([x - size / 2, y - size, x + size / 2, y]))

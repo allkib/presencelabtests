@@ -45,6 +45,7 @@ class PoseResult:
     label: str
     score: float
     scores: dict[str, float] = field(default_factory=dict)
+    holding: list[str] = field(default_factory=list)  # labels of objects in this person's hands
 
     def to_dict(self) -> dict:
         return {
@@ -58,4 +59,5 @@ class PoseResult:
                 for x, y, c in self.person.keypoints
             ],
             "confidence": round(self.person.score, 3),
+            "holding": list(self.holding),
         }
