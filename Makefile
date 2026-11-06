@@ -18,12 +18,12 @@ test:
 	$(BIN)/pytest
 
 lint:
-	$(BIN)/ruff check src tests
-	$(BIN)/ruff format --check src tests
+	$(BIN)/ruff check src tests scripts
+	$(BIN)/ruff format --check src tests scripts
 
 format:
-	$(BIN)/ruff check --fix src tests
-	$(BIN)/ruff format src tests
+	$(BIN)/ruff check --fix src tests scripts
+	$(BIN)/ruff format src tests scripts
 
 clean:
 	rm -rf $(VENV) .pytest_cache .ruff_cache build dist src/*.egg-info

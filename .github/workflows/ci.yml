@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install (CPU-only torch, headless OpenCV)
+        run: |
+          pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+          pip install -e ".[dev]"
+          pip uninstall -y opencv-python
+          pip install --force-reinstall --no-deps "opencv-python-headless>=4.9"
+      - run: make lint BIN="$(dirname "$(which python)")"
+      - run: pytest
+
+  docker:
+    # Builds the exact image Dokploy will build, runs it, and smoke-tests it.
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: posedemo:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Image size
+        run: docker image ls posedemo:ci
+      - name: Start container
+        run: docker run -d --name posedemo -p 8000:8000 posedemo:ci
+      - name: Wait for Docker healthcheck
+        run: |
+          for i in $(seq 1 60); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' posedemo)
+            echo "health: $status"
+            [ "$status" = healthy ] && exit 0
+            [ "$(docker inspect --format '{{.State.Running}}' posedemo)" = true ] || exit 1
+            sleep 3
+          done
+          exit 1
+      - name: Smoke test inside container (real model, /ws/infer)
+        run: docker exec -i posedemo python - http://127.0.0.1:8000 < scripts/smoke_test.py
+      - name: Container runs as non-root
+        run: test "$(docker exec posedemo id -u)" != 0
+      - name: Container logs
+        if: always()
+        run: docker logs posedemo
