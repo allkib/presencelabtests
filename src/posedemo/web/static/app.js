@@ -7,6 +7,11 @@ const wsUrl = (path) => `${location.protocol === "https:" ? "wss" : "ws"}://${lo
 const CAPTURE_MAX_SIDE = 640; // frames are downscaled before upload (model runs at 640)
 const JPEG_QUALITY = 0.7;
 const MIRROR = true;
+const OBJECT_COLOR = "#ffd700";
+const KP_NAMES = [
+  "nose", "L eye", "R eye", "L ear", "R ear", "L shoulder", "R shoulder", "L elbow",
+  "R elbow", "L wrist", "R wrist", "L hip", "R hip", "L knee", "R knee", "L ankle", "R ankle",
+];
 const PALETTE = ["#ff9f40", "#4bc0c0", "#ff6384", "#9966ff", "#36a2eb", "#ffcd56", "#2ecc71", "#e74c3c"];
 
 let config = { skeleton: [], kp_conf: 0.5, server_source: false };
@@ -44,7 +49,28 @@ const fpsMeter = {
   },
 };
 
+const escapeHtml = (s) =>
+  String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+function debugHtml(p) {
+  const rows = Object.entries(p.scores || {})
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, score]) => {
+      const best = name === p.pose ? " best" : "";
+      return `<span class="${best}">${pretty(name)}</span>
+        <div class="mini${best}"><span style="width:${Math.round(score * 100)}%"></span></div>
+        <span class="${best}">${score.toFixed(2)}</span>`;
+    })
+    .join("");
+  const seen = (p.keypoints || [])
+    .map((k, i) => (k[2] >= config.kp_conf ? KP_NAMES[i] : null))
+    .filter(Boolean);
+  return `<div class="debug">${rows}
+    <span class="kps">Visible joints (${seen.length}/17): ${seen.join(", ") || "none"}</span></div>`;
+}
+
 function renderPeople(people) {
+  const debug = $("debug").checked;
   $("people").innerHTML = people.length
     ? people
         .map(
@@ -54,6 +80,8 @@ function renderPeople(people) {
               <span>#${p.id ?? "?"}</span>
             </div>
             <div class="bar"><span style="width:${Math.round(p.score * 100)}%"></span></div>
+            ${p.holding?.length ? `<div class="holding">Holding ${p.holding.map(escapeHtml).join(", ")}</div>` : ""}
+            ${debug ? debugHtml(p) : ""}
           </li>`
         )
         .join("")
@@ -62,6 +90,20 @@ function renderPeople(people) {
   document.querySelectorAll("#poses li").forEach((li) => {
     li.classList.toggle("active", active.has(li.dataset.pose));
   });
+}
+
+function renderObjects(objects = []) {
+  $("objects").innerHTML = objects.length
+    ? objects
+        .map((o) => `<li><span class="label">${escapeHtml(o.label)}</span><span>${o.score.toFixed(2)}</span></li>`)
+        .join("")
+    : '<li class="empty">No objects detected</li>';
+}
+
+function renderVersion() {
+  if (!config.version) return;
+  const started = new Date(config.started_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  $("version").textContent = `v${config.version} · started ${started}`;
 }
 
 // ---------- browser camera mode ----------
@@ -113,6 +155,7 @@ const browser = {
     $("stopBtn").hidden = true;
     clearOverlay();
     renderPeople([]);
+    renderObjects([]);
     fpsMeter.reset();
     setStatus("camera off");
   },
@@ -142,6 +185,7 @@ const browser = {
       setError("");
       drawOverlay(msg);
       renderPeople(msg.people);
+      renderObjects(msg.objects);
       fpsMeter.tick();
       this.sendFrame(); // next frame only after a reply → no backlog
     } else if (msg.type === "status") {
@@ -198,6 +242,24 @@ function drawOverlay(msg) {
   const X = (x) => (MIRROR ? W - x * s : x * s);
   const Y = (y) => y * s;
   const lw = Math.max(2, W / 320);
+  const fontPx = Math.round(Math.max(14, W / 50));
+
+  for (const o of msg.objects || []) {
+    const [x1, y1, x2, y2] = o.bbox;
+    const left = Math.min(X(x1), X(x2));
+    const width = Math.abs(X(x2) - X(x1));
+    ctx.strokeStyle = OBJECT_COLOR;
+    ctx.lineWidth = lw;
+    ctx.strokeRect(left, Y(y1), width, Y(y2) - Y(y1));
+    const text = `${o.label} ${o.score.toFixed(2)}`;
+    ctx.font = `600 ${fontPx}px system-ui, sans-serif`;
+    const tw = ctx.measureText(text).width;
+    const top = Math.min(H, Y(y2) + fontPx + 10);
+    ctx.fillStyle = OBJECT_COLOR;
+    ctx.fillRect(left, top - fontPx - 10, tw + 12, fontPx + 10);
+    ctx.fillStyle = "#141414";
+    ctx.fillText(text, left + 6, top - 8);
+  }
 
   for (const p of msg.people) {
     const color = colorFor(p.pose);
@@ -229,10 +291,11 @@ function drawOverlay(msg) {
     const [x1, y1, x2] = p.bbox;
     const left = Math.max(0, Math.min(X(x1), X(x2)));
     const top = Math.max(28, Y(y1));
-    const text = `#${p.id ?? "?"} ${pretty(p.pose)} ${p.score.toFixed(2)}`;
-    ctx.font = `600 ${Math.round(Math.max(14, W / 50))}px system-ui, sans-serif`;
+    const holding = p.holding?.length ? ` + ${p.holding.join(", ")}` : "";
+    const text = `#${p.id ?? "?"} ${pretty(p.pose)} ${p.score.toFixed(2)}${holding}`;
+    ctx.font = `600 ${fontPx}px system-ui, sans-serif`;
     const tw = ctx.measureText(text).width;
-    const th = Math.max(14, W / 50) + 10;
+    const th = fontPx + 10;
     ctx.fillStyle = color;
     ctx.fillRect(left, top - th, tw + 12, th);
     ctx.fillStyle = "#141414";
@@ -270,6 +333,7 @@ const server = {
       $("fps").textContent = `${st.fps ?? "–"} FPS`;
       setError(st.error || "");
       renderPeople(st.people || []);
+      renderObjects(st.objects || []);
     };
     ws.onclose = () => {
       if (this.active && this.ws === ws) setTimeout(() => this.active && this.connect(), 1000);
@@ -291,6 +355,7 @@ function setMode(mode) {
   });
   setError("");
   renderPeople([]);
+  renderObjects([]);
   if (mode === "browser") {
     server.stop();
     $("stream").hidden = true;
@@ -310,6 +375,9 @@ async function init() {
     fetch("/api/poses").then((r) => r.json()),
   ]);
   config = cfg;
+  renderVersion();
+  $("debug").checked = localStorage.getItem("posedemo.debug") === "1";
+  $("debug").onchange = () => localStorage.setItem("posedemo.debug", $("debug").checked ? "1" : "0");
   $("poses").innerHTML = poses
     .map((p) => `<li data-pose="${p.name}"><b>${pretty(p.name)}</b> — ${p.description}</li>`)
     .join("");

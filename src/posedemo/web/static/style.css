@@ -1,6 +1,6 @@
 :root {
   --bg: #111418; --panel: #1b2027; --line: #2a3038; --text: #e8eaed; --muted: #9aa0a6;
-  --accent: #4bc0c0; --bad: #e74c3c;
+  --accent: #4bc0c0; --bad: #e74c3c; --object: #ffd700;
 }
 * { box-sizing: border-box; }
 body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
@@ -37,3 +37,16 @@ ul { list-style: none; margin: 0; padding: 0; }
 .poses li { padding: 4px 0; font-size: .9rem; }
 .poses li b { color: var(--text); font-weight: 500; }
 .poses li.active b { color: var(--accent); }
+.pill.muted { color: var(--muted); }
+.section-head { display: flex; justify-content: space-between; align-items: center; }
+.toggle { font-size: .8rem; color: var(--muted); display: flex; gap: 4px; align-items: center; cursor: pointer; }
+.holding { margin-top: 4px; font-size: .85rem; color: var(--object); }
+.objects li { display: flex; justify-content: space-between; padding: 4px 0; font-size: .9rem; }
+.objects li .label { color: var(--object); }
+.objects .empty { color: var(--muted); }
+.debug { margin-top: 8px; display: grid; grid-template-columns: 1fr 90px 36px; gap: 2px 8px; font-size: .75rem; color: var(--muted); align-items: center; }
+.debug .best { color: var(--text); }
+.debug .mini { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.debug .mini > span { display: block; height: 100%; background: var(--muted); }
+.debug .best .mini > span, .debug .mini.best > span { background: var(--accent); }
+.debug .kps { grid-column: 1 / -1; margin-top: 4px; }
