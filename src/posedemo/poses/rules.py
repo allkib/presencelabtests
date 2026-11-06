@@ -48,8 +48,38 @@ def wrist_raise(p: Person, side: str) -> float:
     return (p.xy(sh)[1] - p.xy(wr)[1]) / body_scale(p)
 
 
-def hand_up_score(p: Person, side: str) -> float:
-    return ramp(wrist_raise(p, side), 0.15, 0.5)
+def head_y(p: Person) -> float | None:
+    """Highest visible point of the face (nose/eyes), or None."""
+    ys = [p.xy(k)[1] for k in (KP.NOSE, KP.LEFT_EYE, KP.RIGHT_EYE) if p.visible(k)]
+    return float(min(ys)) if ys else None
+
+
+# Confidence cap for the elbow-only fallback, so a visible wrist always wins.
+ELBOW_ONLY_CAP = 0.8
+
+
+def arm_up_score(p: Person, side: str) -> float:
+    """How clearly one arm is raised, 0..1. Needs that side's shoulder (and both shoulders
+    for scale); tolerates a missing wrist, which is common at a desk when the hand leaves
+    the top of the frame or is in front of the face."""
+    if side == "left":
+        sh, el, wr = KP.LEFT_SHOULDER, KP.LEFT_ELBOW, KP.LEFT_WRIST
+    else:
+        sh, el, wr = KP.RIGHT_SHOULDER, KP.RIGHT_ELBOW, KP.RIGHT_WRIST
+    if not p.visible(*SHOULDERS):
+        return 0.0
+    scale = body_scale(p)
+    sh_y = p.xy(sh)[1]
+    if p.visible(wr):
+        wr_y = p.xy(wr)[1]
+        score = ramp((sh_y - wr_y) / scale, 0.05, 0.35)
+        head = head_y(p)
+        if head is not None:  # wrist at/above eye level is unambiguous
+            score = max(score, ramp(head - wr_y, -0.05 * scale, 0.05 * scale))
+        return score
+    if p.visible(el):  # wrist hidden: an elbow at/above the shoulder implies a raised hand
+        return ELBOW_ONLY_CAP * ramp((sh_y - p.xy(el)[1]) / scale, -0.05, 0.15)
+    return 0.0
 
 
 def arm_out_score(p: Person, side: str) -> float:
@@ -82,34 +112,38 @@ class TPose(PoseRule):
         return min(arm_out_score(p, "left"), arm_out_score(p, "right"))
 
 
+# Hand-raise rules only need the shoulders: an arm that is out of frame simply counts
+# as "not raised", so they work when sitting close to a webcam.
+
+
 @register
 class HandsUp(PoseRule):
     name = "hands_up"
     description = "Both hands raised above the shoulders"
-    required = (*LEFT_ARM, *RIGHT_ARM)
+    required = SHOULDERS
 
     def score(self, p: Person) -> float:
-        return min(hand_up_score(p, "left"), hand_up_score(p, "right"))
+        return min(arm_up_score(p, "left"), arm_up_score(p, "right"))
 
 
 @register
 class LeftHandUp(PoseRule):
     name = "left_hand_up"
     description = "Only the left hand raised"
-    required = (*LEFT_ARM, *RIGHT_ARM)
+    required = SHOULDERS
 
     def score(self, p: Person) -> float:
-        return min(hand_up_score(p, "left"), 1.0 - hand_up_score(p, "right"))
+        return min(arm_up_score(p, "left"), 1.0 - arm_up_score(p, "right"))
 
 
 @register
 class RightHandUp(PoseRule):
     name = "right_hand_up"
     description = "Only the right hand raised"
-    required = (*LEFT_ARM, *RIGHT_ARM)
+    required = SHOULDERS
 
     def score(self, p: Person) -> float:
-        return min(hand_up_score(p, "right"), 1.0 - hand_up_score(p, "left"))
+        return min(arm_up_score(p, "right"), 1.0 - arm_up_score(p, "left"))
 
 
 @register
@@ -175,3 +209,14 @@ class Standing(PoseRule):
             if p.visible(wr):
                 arms_down = min(arms_down, ramp(wrist_raise(p, side), 0.0, -0.4))
         return min(straight, upright, arms_down)
+
+
+@register
+class Neutral(PoseRule):
+    name = "neutral"
+    description = "Upper body visible, arms relaxed"
+    required = SHOULDERS
+    fallback = True  # only chosen when no specific pose matches
+
+    def score(self, p: Person) -> float:
+        return 1.0 - max(arm_up_score(p, "left"), arm_up_score(p, "right"))

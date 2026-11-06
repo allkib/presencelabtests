@@ -21,6 +21,9 @@ class PoseRule(ABC):
     # Multiplier applied to the score; use < 1 for "default" poses that should
     # lose ties against more specific ones.
     priority: ClassVar[float] = 1.0
+    # Fallback poses (e.g. "neutral") are only chosen when no regular pose passes the
+    # threshold, so a generic description never beats a specific one.
+    fallback: ClassVar[bool] = False
 
     def evaluate(self, person: Person, kp_conf: float) -> float:
         """Return a confidence in [0, 1]; 0 if required keypoints aren't visible."""

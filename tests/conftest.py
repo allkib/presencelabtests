@@ -59,6 +59,44 @@ def person_factory():
     return make_person
 
 
+# Close-up webcam framing (1280x720): head and shoulders only, shoulders near the bottom.
+DESK_BASE = {
+    KP.NOSE: (600, 450), KP.LEFT_EYE: (640, 410), KP.RIGHT_EYE: (565, 410),
+    KP.LEFT_EAR: (690, 420), KP.RIGHT_EAR: (520, 420),
+    KP.LEFT_SHOULDER: (830, 655), KP.RIGHT_SHOULDER: (380, 655),
+}  # fmt: skip
+DESK_ARM = {  # per side, as (dx from that shoulder, y); dx is mirrored for the right side
+    "down": {"elbow": (40, 715), "wrist": None},
+    "elbow_up": {"elbow": (-20, 575), "wrist": None},
+    "wrist_up": {"elbow": (60, 560), "wrist": (20, 420)},
+    "wrist_above_head": {"elbow": (60, 480), "wrist": (10, 300)},
+}
+
+
+def make_desk_person(left: str | None = None, right: str | None = None):
+    kps = np.zeros((17, 3), dtype=float)
+    for k, (x, y) in DESK_BASE.items():
+        kps[k] = (x, y, 0.9)
+    for side, pose, sign in (("left", left, 1), ("right", right, -1)):
+        if pose is None:
+            continue  # arm out of frame
+        sh = KP.LEFT_SHOULDER if side == "left" else KP.RIGHT_SHOULDER
+        el = KP.LEFT_ELBOW if side == "left" else KP.RIGHT_ELBOW
+        wr = KP.LEFT_WRIST if side == "left" else KP.RIGHT_WRIST
+        sx = kps[sh, 0]
+        for kp, spec in ((el, DESK_ARM[pose]["elbow"]), (wr, DESK_ARM[pose]["wrist"])):
+            if spec is not None:
+                kps[kp] = (sx + sign * spec[0], spec[1], 0.8)
+    visible = kps[kps[:, 2] > 0]
+    bbox = np.array([visible[:, 0].min(), 180, visible[:, 0].max(), 720])
+    return Person(keypoints=kps, bbox=bbox, score=0.9, track_id=1)
+
+
+@pytest.fixture
+def desk_person():
+    return make_desk_person
+
+
 class FakeSource:
     def __init__(self, shape=(480, 640, 3)):
         self.shape = shape

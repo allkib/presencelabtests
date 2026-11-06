@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     device: str = "auto"  # auto | mps | cuda | cpu
     imgsz: int = 640
     conf: float = 0.5  # person detection confidence
-    kp_conf: float = 0.5  # keypoint visibility threshold
+    kp_conf: float = 0.35  # keypoint visibility threshold (edge-of-frame joints score ~0.4)
 
     # Server-side video source (a camera attached to the server, a file or a stream URL).
     # Disable in hosted deployments, where clients stream from their browser instead.
