@@ -97,6 +97,21 @@ class Star(PoseRule):
 The new pose then appears automatically in the classifier, `/api/poses`, and the UI. Add a synthetic
 skeleton case to `tests/test_rules.py` to test it.
 
+## Branches and releases
+
+| Branch | Purpose | Deploys? |
+|---|---|---|
+| `dev` (default) | Day-to-day work. Push here freely. | No |
+| `main` | Production | Yes. Dokploy deploys every change. |
+
+```bash
+git switch dev            # work and push here; CI tests every push
+make release              # opens a PR dev → main with the commit list
+```
+
+`main` is protected. It only accepts pull requests, and the `test` and `docker` CI checks must
+pass before you can merge. Merging the release PR is what updates the live server.
+
 ## Deploying with Docker / Dokploy
 
 The `Dockerfile` builds a CPU-only, browser-camera image. The model weights are included in the
@@ -108,7 +123,7 @@ docker compose up --build        # local test → http://localhost:8000
 
 **Dokploy:**
 
-1. Create an **Application** and point it at this GitHub repo (branch `main`).
+1. Create an **Application** and point it at this GitHub repo with branch **`main`** (production).
 2. Set **Build Type** to **Dockerfile** (path `Dockerfile`).
 3. Under **Domains**, add your domain with **container port `8000`** and turn on **HTTPS**
    (Let's Encrypt). HTTPS is required, because browsers block camera access on plain-HTTP sites.

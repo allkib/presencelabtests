@@ -2,7 +2,7 @@ PYTHON ?= python3.11
 VENV   := .venv
 BIN    := $(VENV)/bin
 
-.PHONY: setup run test lint format clean
+.PHONY: setup run test lint format clean release
 
 $(BIN)/python:
 	$(PYTHON) -m venv $(VENV)
@@ -24,6 +24,10 @@ lint:
 format:
 	$(BIN)/ruff check --fix src tests scripts
 	$(BIN)/ruff format src tests scripts
+
+release:  ## Open a PR from dev → main (production). Merging it deploys.
+	gh pr create --base main --head dev --title "Release: $$(date +%Y-%m-%d)" \
+		--body "$$(git log --format='- %s' origin/main..origin/dev)"
 
 clean:
 	rm -rf $(VENV) .pytest_cache .ruff_cache build dist src/*.egg-info
