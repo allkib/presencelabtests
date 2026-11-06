@@ -11,6 +11,7 @@ FROM python:${PYTHON_VERSION}-slim AS build
 #   --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124
 ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
 ARG MODEL=yolo11n-pose.pt
+ARG OBJECT_MODEL=yolo11n.pt
 
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 RUN apt-get update \
@@ -29,13 +30,15 @@ RUN pip install . \
     && pip uninstall -y opencv-python \
     && pip install --force-reinstall --no-deps "opencv-python-headless>=4.9"
 
-# Bake the model weights into the image (no download at container start).
+# Bake both models' weights into the image (no download at container start).
 ENV YOLO_CONFIG_DIR=/tmp/ultralytics
-RUN mkdir -p /app/models && python -c "from ultralytics import YOLO; YOLO('/app/models/${MODEL}')"
+RUN mkdir -p /app/models && python -c "from ultralytics import YOLO; \
+    YOLO('/app/models/${MODEL}'); YOLO('/app/models/${OBJECT_MODEL}')"
 
 # ---------- runtime ----------
 FROM python:${PYTHON_VERSION}-slim AS runtime
 ARG MODEL=yolo11n-pose.pt
+ARG OBJECT_MODEL=yolo11n.pt
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libglib2.0-0 \
@@ -56,6 +59,7 @@ ENV PATH=/opt/venv/bin:$PATH \
     POSEDEMO_DEVICE=cpu \
     POSEDEMO_MODELS_DIR=/app/models \
     POSEDEMO_MODEL=${MODEL} \
+    POSEDEMO_OBJECT_MODEL=${OBJECT_MODEL} \
     POSEDEMO_FORWARDED_ALLOW_IPS=*
 
 USER app
