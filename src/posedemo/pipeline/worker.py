@@ -14,6 +14,7 @@ from posedemo.pipeline.bus import ResultBus
 from posedemo.poses import LabelSmoother, PoseClassifier
 from posedemo.sources.base import FrameSource
 from posedemo.vision.detector import PoseDetector
+from posedemo.vision.tracking import IouTracker
 
 log = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ class PosePipeline:
         self.classifier = classifier or PoseClassifier(
             threshold=settings.pose_threshold, kp_conf=settings.kp_conf
         )
+        self.tracker = IouTracker()
         self.smoother = LabelSmoother(window=settings.smoothing_window)
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -87,7 +89,7 @@ class PosePipeline:
 
     def _process(self, image, timestamp: float) -> None:
         s = self.settings
-        people = self.detector.detect(image)
+        people = self.tracker.update(self.detector.detect(image))
         results = self.smoother.update(self.classifier.classify(people))
 
         h, w = image.shape[:2]

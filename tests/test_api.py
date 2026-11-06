@@ -33,7 +33,7 @@ def test_state_reports_pose(client):
     state = client.get("/api/state").json()
     assert state["status"] == "running"
     assert state["people"][0]["pose"] == "t_pose"
-    assert state["people"][0]["id"] == 3
+    assert state["people"][0]["id"] == 1
 
 
 def test_health(client):

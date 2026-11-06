@@ -15,7 +15,6 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
     "pydantic-settings>=2.2",
-    "lap>=0.5.12",  # required by Ultralytics ByteTrack tracker
 ]
 
 [project.optional-dependencies]
